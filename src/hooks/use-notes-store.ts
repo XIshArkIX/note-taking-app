@@ -2,62 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { filterNotes, getSummary, sortNotes } from "@/lib/note-filters";
 import { notesRepository } from "@/lib/notes-repository";
 import type {
   CreateNoteInput,
   Note,
   NotesFilter,
-  NotesSummary,
   UpdateNoteInput,
 } from "@/types/note";
-
-const isOverdue = (note: Note, nowMs: number) =>
-  note.dueDate !== null && Date.parse(note.dueDate) < nowMs;
-
-const sortNotes = (notes: Note[]) =>
-  [...notes].sort((a, b) => {
-    if (a.isPinned !== b.isPinned) {
-      return a.isPinned ? -1 : 1;
-    }
-
-    return Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
-  });
-
-const getSummary = (notes: Note[]): NotesSummary => {
-  const nowMs = Date.now();
-  return notes.reduce<NotesSummary>(
-    (acc, note) => {
-      if (note.deletedAt !== null) {
-        acc.trash += 1;
-        return acc;
-      }
-
-      acc.all += 1;
-      if (isOverdue(note, nowMs)) {
-        acc.archive += 1;
-      }
-
-      return acc;
-    },
-    { all: 0, archive: 0, trash: 0 },
-  );
-};
-
-const filterNotes = (notes: Note[], filter: NotesFilter): Note[] => {
-  const nowMs = Date.now();
-
-  if (filter === "trash") {
-    return notes.filter((note) => note.deletedAt !== null);
-  }
-
-  if (filter === "archive") {
-    return notes.filter(
-      (note) => note.deletedAt === null && isOverdue(note, nowMs),
-    );
-  }
-
-  return notes.filter((note) => note.deletedAt === null);
-};
 
 export const useNotesStore = () => {
   const [notes, setNotes] = useState<Note[]>([]);

@@ -1,0 +1,247 @@
+# .gitlab-ci.yml
+#
+# Reference GitLab CI pipeline for the toolchain comparison study.
+#
+# Every stage gate mirrors the one in teamcity.kts and gitea-workflow.yml so
+# results are comparable across CI hosts.
+#
+# Variables to set in GitLab project/group settings (not committed):
+#   VARIANT_ID        – matches toolchain/variants/catalog.ts id
+#   BASE_URL          – app URL during e2e stage (default: http://localhost:3000)
+#   TURBO_TOKEN       – optional Turborepo remote cache token
+#   TURBO_TEAM        – optional Turborepo team slug
+#
+# Runners: standard GitLab shared runners (linux/amd64, 4 vCPU / 16 GB)
+# Runtime image: node:22-slim with playwright installed in the e2e job
+
+stages:
+  - install
+  - check
+  - test
+  - e2e
+  - build
+  - metrics
+
+variables:
+  # ── pnpm settings (override per variant via CI variables) ─────────────
+  PACKAGE_MANAGER: "pnpm"
+  INSTALL_CMD: "pnpm install --frozen-lockfile"
+  BUILD_CMD: "pnpm run build"
+  TEST_CMD: "pnpm test"
+  LINT_CMD: "pnpm run lint"
+  TYPECHECK_CMD: ""             # set to "pnpm run typecheck" if variant splits it
+  E2E_CMD: "pnpm run test:e2e"
+  # ── cache keys ────────────────────────────────────────────────────────
+  PNPM_CACHE_FOLDER: ".pnpm-store"
+  NODE_VERSION: "22"
+  FF_USE_FASTZIP: "true"        # GitLab runner cache compression
+
+default:
+  image: node:22-slim
+  before_script:
+    - corepack enable
+    - corepack prepare pnpm@latest --activate
+  interruptible: true
+
+# ── Cache template ─────────────────────────────────────────────────────────
+
+.cache-pnpm: &cache-pnpm
+  cache:
+    key:
+      files:
+        - pnpm-lock.yaml
+    paths:
+      - $PNPM_CACHE_FOLDER
+    policy: pull-push
+
+.cache-nm: &cache-nm
+  cache:
+    key:
+      files:
+        - pnpm-lock.yaml
+    paths:
+      - node_modules
+    policy: pull
+
+# ── Stage: install ─────────────────────────────────────────────────────────
+
+install:deps:
+  stage: install
+  <<: *cache-pnpm
+  script:
+    - pnpm config set store-dir $PNPM_CACHE_FOLDER
+    - $INSTALL_CMD
+  artifacts:
+    paths:
+      - node_modules
+    expire_in: 1 hour
+
+# ── Stage: check ──────────────────────────────────────────────────────────
+
+check:lint:
+  stage: check
+  needs: [install:deps]
+  <<: *cache-nm
+  script:
+    - $LINT_CMD
+  allow_failure: false
+
+check:typecheck:
+  stage: check
+  needs: [install:deps]
+  <<: *cache-nm
+  rules:
+    - if: '$TYPECHECK_CMD != ""'
+  script:
+    - $TYPECHECK_CMD
+
+# ── Stage: test ───────────────────────────────────────────────────────────
+
+test:unit:
+  stage: test
+  needs: [check:lint]
+  <<: *cache-nm
+  script:
+    - $TEST_CMD --reporter=json --outputFile=test-results/unit.json
+  after_script:
+    # Extract pass/fail counts for the metrics stage
+    - |
+      node -e "
+        const r = JSON.parse(require('fs').readFileSync('test-results/unit.json','utf8'));
+        const passed = r.numPassedTests ?? r.passed ?? 0;
+        const failed = r.numFailedTests ?? r.failed ?? 0;
+        console.log('UNIT_PASSED='+passed);
+        console.log('UNIT_FAILED='+failed);
+      " >> unit.env || true
+  artifacts:
+    paths:
+      - test-results/
+    reports:
+      junit: test-results/unit.xml   # optional: configure reporter to also emit JUnit
+      dotenv: unit.env
+    expire_in: 7 days
+
+# ── Stage: e2e ────────────────────────────────────────────────────────────
+
+test:e2e:playwright:
+  stage: e2e
+  needs: [test:unit]
+  image: mcr.microsoft.com/playwright:v1.52.0-jammy
+  before_script:
+    - corepack enable
+    - corepack prepare pnpm@latest --activate
+    - pnpm config set store-dir $PNPM_CACHE_FOLDER
+    - $INSTALL_CMD
+    # Start the app in the background and wait for it to become ready
+    - $BUILD_CMD
+    - node_modules/.bin/next start &
+    - npx wait-on http://localhost:3000 --timeout 60000
+  script:
+    - BASE_URL=http://localhost:3000 PLAYWRIGHT_CI=1 npx playwright test
+  after_script:
+    - kill %1 || true   # stop the app background process
+  variables:
+    PLAYWRIGHT_JUNIT_OUTPUT_NAME: playwright-results/results.xml
+  artifacts:
+    when: always
+    paths:
+      - playwright-report/
+      - playwright-results/
+    reports:
+      junit: playwright-results/results.xml
+    expire_in: 7 days
+
+test:e2e:cypress:
+  stage: e2e
+  needs: [test:unit]
+  image: cypress/included:latest
+  rules:
+    - if: '$E2E_RUNNER == "cypress"'
+  before_script:
+    - corepack enable
+    - corepack prepare pnpm@latest --activate
+    - pnpm config set store-dir $PNPM_CACHE_FOLDER
+    - $INSTALL_CMD
+    - $BUILD_CMD
+    - node_modules/.bin/next start &
+    - npx wait-on http://localhost:3000 --timeout 60000
+  script:
+    - npx cypress run --reporter junit --reporter-options "mochaFile=cypress-results/results.xml"
+  after_script:
+    - kill %1 || true
+  artifacts:
+    when: always
+    paths:
+      - cypress/screenshots/
+      - cypress/videos/
+      - cypress-results/
+    reports:
+      junit: cypress-results/results.xml
+    expire_in: 7 days
+
+# ── Stage: build (production artefact) ───────────────────────────────────
+
+build:production:
+  stage: build
+  needs: [test:e2e:playwright]
+  <<: *cache-nm
+  script:
+    - $BUILD_CMD
+    # Compute and persist output sizes
+    - |
+      JS_SIZE=$(find .next dist out build -name "*.js" ! -name "*.map" -type f -exec wc -c {} + 2>/dev/null | tail -1 | awk '{print $1}' || echo 0)
+      CSS_SIZE=$(find .next dist out build -name "*.css" ! -name "*.map" -type f -exec wc -c {} + 2>/dev/null | tail -1 | awk '{print $1}' || echo 0)
+      ARTIFACT_SIZE=$(du -sb .next dist out build 2>/dev/null | awk '{sum+=$1} END {print sum}' || echo 0)
+      echo "JS_BUNDLE_BYTES=$JS_SIZE" >> build.env
+      echo "CSS_BUNDLE_BYTES=$CSS_SIZE" >> build.env
+      echo "ARTIFACT_BYTES=$ARTIFACT_SIZE" >> build.env
+  artifacts:
+    paths:
+      - .next/
+    reports:
+      dotenv: build.env
+    expire_in: 1 day
+
+# ── Stage: metrics ────────────────────────────────────────────────────────
+
+metrics:collect:
+  stage: metrics
+  needs:
+    - job: build:production
+      artifacts: true
+    - job: test:unit
+      artifacts: true
+  <<: *cache-nm
+  script:
+    - mkdir -p toolchain/metrics/results
+    - |
+      MEASURED_AT=$(node -e "process.stdout.write(new Date().toISOString())")
+      NODE_VER=$(node --version)
+      PNPM_VER=$(pnpm --version 2>/dev/null || echo "")
+      TSC_VER=$(npx tsc --version 2>/dev/null | head -1 || echo "")
+      cat > "toolchain/metrics/results/${VARIANT_ID:-unknown}.json" << EOF
+      {
+        "variantId": "${VARIANT_ID:-unknown}",
+        "measuredAt": "$MEASURED_AT",
+        "ciHost": "gitlab",
+        "pipelineId": "${CI_PIPELINE_ID:-}",
+        "toolVersions": {
+          "node": "$NODE_VER",
+          "pnpm": "$PNPM_VER",
+          "typescript": "$TSC_VER"
+        },
+        "output": {
+          "jsBundleSizeBytes": ${JS_BUNDLE_BYTES:-0},
+          "cssBundleSizeBytes": ${CSS_BUNDLE_BYTES:-0},
+          "deployArtifactSizeBytes": ${ARTIFACT_BYTES:-0}
+        },
+        "interop": {
+          "unitTestsPassed": ${UNIT_PASSED:-0},
+          "unitTestsFailed": ${UNIT_FAILED:-0}
+        }
+      }
+      EOF
+  artifacts:
+    paths:
+      - toolchain/metrics/results/
+    expire_in: 30 days

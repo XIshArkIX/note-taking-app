@@ -31,4 +31,23 @@ export const getNotesDb = () => {
   return dbPromise;
 };
 
+/**
+ * Drops the cached db connection so the next `getNotesDb()` opens a fresh
+ * database.  Used only in tests (e.g. with fake-indexeddb) to guarantee
+ * isolation between cases.  Calling this in production code is a no-op but
+ * will force a reconnection on next use.
+ */
+export const resetDb = async () => {
+  if (dbPromise) {
+    const db = await dbPromise;
+    db.close();
+    dbPromise = null;
+  }
+  await new Promise<void>((resolve, reject) => {
+    const req = indexedDB.deleteDatabase(DB_NAME);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+};
+
 export const NOTES_STORE_NAME = NOTES_STORE;
