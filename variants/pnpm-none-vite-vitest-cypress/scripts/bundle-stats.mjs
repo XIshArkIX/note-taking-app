@@ -3,7 +3,7 @@
  * variants/shared/scripts/bundle-stats.mjs
  *
  * Walks the build output directory, totals JS and CSS sizes, and writes
- * pipeline-report.json (+ optional GitLab metrics .txt).
+ * pipeline-report.json (+ optional GitLab metrics .txt + human summary).
  *
  * Environment variables:
  *   VARIANT      – variant folder name (used as label in report)
@@ -13,9 +13,10 @@
  *   LINT_TIME    – lint wall-clock time in ms
  *   TC_TIME      – typecheck wall-clock time in ms
  *   STATS_OUT    – output path (default: pipeline-report.json)
+ *   SUMMARY_OUT  – optional plain-text summary for humans / container CMD
  */
 import { readdir, stat, writeFile } from "node:fs/promises";
-import { join, extname } from "node:path";
+import { extname, join } from "node:path";
 
 async function walk(dir) {
   let results = [];
@@ -72,20 +73,34 @@ if (outputDir) {
   }
 }
 
+const installMs = Number(process.env.INSTALL_TIME ?? 0);
+const lintMs = Number(process.env.LINT_TIME ?? 0);
+const typecheckMs = Number(process.env.TC_TIME ?? 0);
+const buildMs = Number(process.env.BUILD_TIME ?? 0);
+const totalMs = installMs + lintMs + typecheckMs + buildMs;
+
+const stages = [
+  { id: "install", label: "Install dependencies", durationMs: installMs },
+  { id: "lint", label: "Lint", durationMs: lintMs },
+  { id: "typecheck", label: "Typecheck", durationMs: typecheckMs },
+  { id: "build", label: "Build", durationMs: buildMs },
+].map((s) => ({
+  ...s,
+  percentOfTotal:
+    totalMs > 0 ? Math.round((s.durationMs / totalMs) * 10_000) / 10_000 : 0,
+}));
+
 // ── build report ───────────────────────────────────────────────────────────
 const report = {
   variant: process.env.VARIANT ?? "unknown",
   measuredAt: new Date().toISOString(),
+  stages,
   timings: {
-    installMs: Number(process.env.INSTALL_TIME ?? 0),
-    lintMs: Number(process.env.LINT_TIME ?? 0),
-    typecheckMs: Number(process.env.TC_TIME ?? 0),
-    buildMs: Number(process.env.BUILD_TIME ?? 0),
-    totalMs:
-      Number(process.env.INSTALL_TIME ?? 0) +
-      Number(process.env.LINT_TIME ?? 0) +
-      Number(process.env.TC_TIME ?? 0) +
-      Number(process.env.BUILD_TIME ?? 0),
+    installMs,
+    lintMs,
+    typecheckMs,
+    buildMs,
+    totalMs,
   },
   bundle: {
     outputDir: outputDir ?? "(not found)",
@@ -98,6 +113,31 @@ const report = {
 const outPath = process.env.STATS_OUT ?? "pipeline-report.json";
 await writeFile(outPath, JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
+
+const summaryPath = process.env.SUMMARY_OUT ?? null;
+if (summaryPath) {
+  const lines = [
+    `Variant: ${report.variant}`,
+    `Measured: ${report.measuredAt}`,
+    "",
+    "Stages (wall clock)",
+    "---------------------",
+    ...stages.map(
+      (s) =>
+        `${s.label.padEnd(22)} ${String(s.durationMs).padStart(8)} ms  (${(s.percentOfTotal * 100).toFixed(1)}%)`,
+    ),
+    `${"Total pipeline".padEnd(22)} ${String(totalMs).padStart(8)} ms`,
+    "",
+    "Bundle output",
+    "--------------",
+    `Directory:        ${report.bundle.outputDir}`,
+    `JavaScript (KB):  ${report.bundle.jsBundleKb}`,
+    `CSS (KB):         ${report.bundle.cssBundleKb}`,
+    `All files (KB):   ${report.bundle.totalArtifactKb}`,
+    "",
+  ];
+  await writeFile(summaryPath, `${lines.join("\n")}\n`);
+}
 
 // ── GitLab metrics format (optional) ─────────────────────────────────────
 // Produces a file usable with artifacts:reports:metrics in GitLab CI.
@@ -113,5 +153,6 @@ if (metricsPath) {
     `build_ms ${report.timings.buildMs}`,
     `total_pipeline_ms ${report.timings.totalMs}`,
   ];
+  // biome-ignore lint/style/useTemplate: this is a valid use of template literals
   await writeFile(metricsPath, lines.join("\n") + "\n");
 }

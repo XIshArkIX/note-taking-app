@@ -22,10 +22,7 @@ import { CRITERIA } from "../acceptance/criteria";
 /** Opens the create-note dialog and fills the minimal required fields. */
 async function openAndFillCreateDialog(
   page: import("@playwright/test").Page,
-  {
-    title,
-    content,
-  }: { title: string; content: string },
+  { title, content }: { title: string; content: string },
 ) {
   await page.getByRole("button", { name: /new note/i }).click();
   await page.getByLabel(/title/i).fill(title);
@@ -38,9 +35,7 @@ test.describe("Notes app acceptance journeys", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
     // Clear IndexedDB so each test starts from an empty store.
-    await page.evaluate(() =>
-      indexedDB.deleteDatabase("offline-notes-db"),
-    );
+    await page.evaluate(() => indexedDB.deleteDatabase("offline-notes-db"));
     await page.reload();
   });
 
@@ -51,9 +46,9 @@ test.describe("Notes app acceptance journeys", () => {
     });
     await page.getByRole("button", { name: /save note/i }).click();
 
-    await expect(
-      page.getByText("Playwright note"),
-    ).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText("Playwright note")).toBeVisible({
+      timeout: 5_000,
+    });
   });
 
   test(CRITERIA.E2E_02.title, async ({ page }) => {
@@ -154,9 +149,7 @@ test.describe("Notes app acceptance journeys", () => {
 
   test(CRITERIA.E2E_06.title, async ({ page }) => {
     // Start with empty store — sidebar should show 0 for all filters.
-    await expect(
-      page.getByRole("navigation").getByText(/all/i),
-    ).toBeVisible();
+    await expect(page.getByRole("navigation").getByText(/all/i)).toBeVisible();
 
     // Create one note; All count should become 1.
     await openAndFillCreateDialog(page, {
@@ -167,8 +160,6 @@ test.describe("Notes app acceptance journeys", () => {
     await expect(page.getByText("Count test")).toBeVisible();
 
     // The sidebar should display count 1 next to All.
-    await expect(
-      page.getByRole("navigation").getByText("1"),
-    ).toBeVisible();
+    await expect(page.getByRole("navigation").getByText("1")).toBeVisible();
   });
 });

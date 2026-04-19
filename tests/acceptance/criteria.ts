@@ -88,8 +88,7 @@ export const CRITERIA = {
   },
   FN_11: {
     id: "FN-11",
-    title:
-      "filterNotes('archive') returns overdue non-trashed notes only",
+    title: "filterNotes('archive') returns overdue non-trashed notes only",
     readmeAnchor: "archive-behavior",
     tier: "unit",
   },
@@ -139,8 +138,7 @@ export const CRITERIA = {
   },
   INT_02: {
     id: "INT-02",
-    title:
-      "notesRepository.create defaults startDate to now when omitted",
+    title: "notesRepository.create defaults startDate to now when omitted",
     readmeAnchor: "note-cards-in-a-grid",
     tier: "int",
   },
@@ -158,7 +156,8 @@ export const CRITERIA = {
   },
   INT_05: {
     id: "INT-05",
-    title: "notesRepository.softDelete sets deletedAt without deleting the record",
+    title:
+      "notesRepository.softDelete sets deletedAt without deleting the record",
     readmeAnchor: "trash-behavior",
     tier: "int",
   },
@@ -190,8 +189,7 @@ export const CRITERIA = {
   },
   E2E_04: {
     id: "E2E-04",
-    title:
-      "Archive filter shows overdue notes; non-overdue notes are absent",
+    title: "Archive filter shows overdue notes; non-overdue notes are absent",
     readmeAnchor: "archive-behavior",
     tier: "e2e",
   },

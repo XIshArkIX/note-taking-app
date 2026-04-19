@@ -7,14 +7,18 @@ export default {
   output: [
     {
       file: "dist/index.mjs",
-      format: "esm",       // ESM-only output
+      format: "esm", // ESM-only output
       sourcemap: false,
     },
   ],
   external: ["zod"],
   plugins: [
     resolve(),
-    typescript({ tsconfig: "./tsconfig.json", declaration: true, declarationDir: "dist" }),
+    typescript({
+      tsconfig: "./tsconfig.json",
+      declaration: true,
+      declarationDir: "dist",
+    }),
   ],
   treeshake: true,
 };

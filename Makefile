@@ -22,11 +22,15 @@ VARIANTS := \
 
 variant-pm = $(word 1,$(subst -, ,$(1)))
 variant-run = $(if $(filter bun,$(call variant-pm,$(1))),bun run,$(if $(filter npm,$(call variant-pm,$(1))),npm run,$(if $(filter pnpm,$(call variant-pm,$(1))),pnpm run,yarn run)))
+variant-ci = $(if $(filter bun,$(call variant-pm,$(1))),bun install --frozen-lockfile,$(if $(filter npm,$(call variant-pm,$(1))),npm ci,$(if $(filter pnpm,$(call variant-pm,$(1))),pnpm install --frozen-lockfile,yarn install --immutable)))
 
 define VARIANT_RULES
-.PHONY: $(1) $(1)-lint $(1)-typecheck $(1)-build
+.PHONY: $(1) $(1)-install $(1)-lint $(1)-typecheck $(1)-build
 
-$(1)-lint:
+$(1)-install:
+	cd $(VARIANTS_DIR)/$(1) && $(call variant-ci,$(1))
+
+$(1)-lint: $(1)-install
 	cd $(VARIANTS_DIR)/$(1) && $(call variant-run,$(1)) lint
 
 $(1)-typecheck: $(1)-lint
@@ -40,6 +44,7 @@ endef
 
 $(foreach v,$(VARIANTS),$(eval $(call VARIANT_RULES,$(v))))
 
-.PHONY: all check-all
+.PHONY: all check-all install-all
 all: check-all
+install-all: $(addsuffix -install,$(VARIANTS))
 check-all: $(VARIANTS)

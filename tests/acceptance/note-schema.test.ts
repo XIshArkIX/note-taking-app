@@ -103,21 +103,17 @@ describe("updateNoteSchema", () => {
   });
 
   it(CRITERIA.FN_06.title, () => {
-    expect(
-      updateNoteSchema.safeParse({ title: "New title" }).success,
-    ).toBe(true);
+    expect(updateNoteSchema.safeParse({ title: "New title" }).success).toBe(
+      true,
+    );
   });
 
   it("accepts deletedAt ISO string", () => {
-    expect(
-      updateNoteSchema.safeParse({ deletedAt: PAST }).success,
-    ).toBe(true);
+    expect(updateNoteSchema.safeParse({ deletedAt: PAST }).success).toBe(true);
   });
 
   it("accepts deletedAt: null (restore from trash)", () => {
-    expect(
-      updateNoteSchema.safeParse({ deletedAt: null }).success,
-    ).toBe(true);
+    expect(updateNoteSchema.safeParse({ deletedAt: null }).success).toBe(true);
   });
 
   it("rejects dueDate earlier than startDate", () => {
@@ -175,9 +171,7 @@ describe("noteTagSchema", () => {
 
   it("accepts all preset tag types without color", () => {
     for (const type of ["info", "warn", "error"] as const) {
-      expect(
-        noteTagSchema.safeParse({ name: "tag", type }).success,
-      ).toBe(true);
+      expect(noteTagSchema.safeParse({ name: "tag", type }).success).toBe(true);
     }
   });
 

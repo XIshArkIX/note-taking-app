@@ -17,7 +17,6 @@ import { CRITERIA } from "./criteria";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-const PAST = new Date(Date.now() - 86_400_000).toISOString(); // yesterday
 const minCreate = (overrides = {}) => ({
   title: "Test note",
   content: "Content body",
@@ -93,8 +92,8 @@ describe("notesRepository", () => {
   });
 
   it("throws when toggling pin of a non-existent note", async () => {
-    await expect(
-      notesRepository.togglePin("missing-id"),
-    ).rejects.toThrow("Note not found");
+    await expect(notesRepository.togglePin("missing-id")).rejects.toThrow(
+      "Note not found",
+    );
   });
 });

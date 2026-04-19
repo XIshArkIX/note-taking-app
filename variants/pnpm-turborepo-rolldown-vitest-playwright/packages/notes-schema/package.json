@@ -5,7 +5,12 @@
   "main": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "import": { "types": "./dist/index.d.ts", "default": "./dist/index.mjs" } }
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      }
+    }
   },
   "scripts": {
     "build": "rolldown -c rolldown.config.ts && tsc --emitDeclarationOnly --declaration --outDir dist",
@@ -13,7 +18,9 @@
     "lint": "biome check .",
     "test": "vitest run"
   },
-  "dependencies": { "zod": "^4.3.6" },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
   "devDependencies": {
     "@biomejs/biome": "2.2.0",
     "rolldown": "^1.0.0-rc.0",

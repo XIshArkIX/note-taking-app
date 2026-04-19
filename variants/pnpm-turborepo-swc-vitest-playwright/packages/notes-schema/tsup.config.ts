@@ -8,7 +8,7 @@ export default defineConfig({
   dts: true,
   clean: true,
   sourcemap: false,
-  esbuildOptions(options) {
+  esbuildOptions(_options) {
     // Force SWC by disabling esbuild's own JSX/TS handling:
     // tsup will delegate to @swc/core when esbuildPlugins include the SWC plugin
   },

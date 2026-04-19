@@ -23,9 +23,9 @@ async function seedNote(page: import("@playwright/test").Page) {
 
   await page.getByRole("button", { name: /new note/i }).click();
   await page.getByLabel(/title/i).fill("Visual test note");
-  await page.getByLabel(/content/i).fill(
-    "This is a note body used for visual regression screenshots.",
-  );
+  await page
+    .getByLabel(/content/i)
+    .fill("This is a note body used for visual regression screenshots.");
   await page.getByRole("button", { name: /save note/i }).click();
   await expect(page.getByText("Visual test note")).toBeVisible();
 }
@@ -34,8 +34,8 @@ async function setTheme(
   page: import("@playwright/test").Page,
   mode: "light" | "dark",
 ) {
-  const isDark = await page.evaluate(
-    () => document.documentElement.classList.contains("dark"),
+  const isDark = await page.evaluate(() =>
+    document.documentElement.classList.contains("dark"),
   );
   const wantDark = mode === "dark";
   if (isDark !== wantDark) {

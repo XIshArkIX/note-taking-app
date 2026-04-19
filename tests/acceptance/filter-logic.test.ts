@@ -48,23 +48,19 @@ const trashedOverdue = (id = "both") =>
 
 describe("filterNotes", () => {
   it(CRITERIA.FN_09.title, () => {
-    const notes = [note("n1"), trashed("t1")];
+    const notes = [note({}, "n1"), trashed("t1")];
     const result = filterNotes(notes as Note[], "all");
     expect(result.map((n) => n.id)).toEqual(["n1"]);
   });
 
   it(CRITERIA.FN_10.title, () => {
-    const notes = [note("n1"), trashed("t1"), overdue("o1")];
+    const notes = [note({}, "n1"), trashed("t1"), overdue("o1")];
     const result = filterNotes(notes as Note[], "trash");
     expect(result.map((n) => n.id)).toEqual(["t1"]);
   });
 
   it(CRITERIA.FN_11.title, () => {
-    const notes = [
-      note("live"),
-      overdue("od"),
-      trashed("tr"),
-    ];
+    const notes = [note({}, "live"), overdue("od"), trashed("tr")];
     const result = filterNotes(notes as Note[], "archive");
     expect(result.map((n) => n.id)).toEqual(["od"]);
   });
@@ -76,12 +72,15 @@ describe("filterNotes", () => {
   });
 
   it("archive excludes notes with no dueDate", () => {
-    const result = filterNotes([note("n1")], "archive");
+    const result = filterNotes([note({}, "n1")], "archive");
     expect(result).toHaveLength(0);
   });
 
   it("archive excludes notes with a future dueDate", () => {
-    const futureNote = note({ dueDate: new Date(FUTURE_MS).toISOString() }, "f1");
+    const futureNote = note(
+      { dueDate: new Date(FUTURE_MS).toISOString() },
+      "f1",
+    );
     const result = filterNotes([futureNote], "archive");
     expect(result).toHaveLength(0);
   });
@@ -91,8 +90,14 @@ describe("filterNotes", () => {
 
 describe("sortNotes", () => {
   it(CRITERIA.FN_13.title, () => {
-    const older = note({ isPinned: false, updatedAt: new Date(1000).toISOString() }, "older");
-    const pinned = note({ isPinned: true, updatedAt: new Date(500).toISOString() }, "pinned");
+    const older = note(
+      { isPinned: false, updatedAt: new Date(1000).toISOString() },
+      "older",
+    );
+    const pinned = note(
+      { isPinned: true, updatedAt: new Date(500).toISOString() },
+      "pinned",
+    );
     const result = sortNotes([older, pinned]);
     expect(result[0].id).toBe("pinned");
   });
@@ -105,7 +110,7 @@ describe("sortNotes", () => {
   });
 
   it("does not mutate the original array", () => {
-    const notes = [note("a"), note("b", "b")];
+    const notes = [note({}, "a"), note({}, "b")];
     const original = [...notes];
     sortNotes(notes);
     expect(notes.map((n) => n.id)).toEqual(original.map((n) => n.id));
@@ -116,7 +121,7 @@ describe("sortNotes", () => {
 
 describe("getSummary", () => {
   const notes = [
-    note("live"),
+    note({}, "live"),
     overdue("od"),
     trashed("tr"),
     trashedOverdue("both"),

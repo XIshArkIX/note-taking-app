@@ -1,11 +1,13 @@
-.DS_Store
-.git
-.gitignore
-.next
-Dockerfile
-README.md
-node_modules
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.env*
+# Root build context for variant pipeline Dockerfiles (docker build -f variants/... .)
+**/.git
+**/.cursor
+**/node_modules
+**/.pnpm-store
+**/.next
+**/dist
+**/out
+**/build
+**/coverage
+**/.turbo
+**/.yarn/cache
+**/.yarn/install-state.gz
