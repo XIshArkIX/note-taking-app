@@ -1,0 +1,23 @@
+{
+  "name": "pnpm-nx-rollup-vitest-playwright",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "nx run-many --target=build --all",
+    "dev": "nx run-many --target=dev --all --parallel",
+    "lint": "nx run-many --target=lint --all",
+    "typecheck": "nx run-many --target=typecheck --all",
+    "test": "nx run-many --target=test --all",
+    "bundle-stats": "node scripts/bundle-stats.mjs"
+  },
+  "devDependencies": {
+    "@nx/js": "^21",
+    "@nx/next": "^21",
+    "@nx/vite": "^21",
+    "nx": "^21",
+    "rollup": "^4",
+    "@rollup/plugin-typescript": "^12",
+    "@rollup/plugin-node-resolve": "^15",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,84 @@
+# Stack: pnpm · Turborepo · tsup (dual ESM+CJS) · Next.js · Vitest · Playwright
+# Build: turbo run build  (orchestrates packages/notes-schema first, then apps/notes-app)
+stages: [install, lint, typecheck, build]
+
+variables:
+  VARIANT: "pnpm-turborepo-tsup-vitest-playwright"
+  PNPM_STORE: ".pnpm-store"
+  TURBO_TOKEN: "$TURBO_TOKEN"        # set in GitLab project secrets for remote cache
+  TURBO_TEAM: "$TURBO_TEAM"
+
+default:
+  image: "node:22-slim"
+  before_script:
+    - corepack enable && corepack prepare pnpm@latest --activate
+    - pnpm config set store-dir $PNPM_STORE
+  interruptible: true
+
+install:
+  stage: install
+  cache:
+    key:
+      files: [pnpm-lock.yaml]
+    paths: [$PNPM_STORE]
+    policy: pull-push
+  script:
+    - export T0=$(date +%s%3N)
+    - pnpm install --frozen-lockfile
+    - echo "INSTALL_TIME=$(($(date +%s%3N) - T0))" >> timing.env
+  artifacts:
+    reports:
+      dotenv: timing.env
+    paths: [node_modules/, packages/*/node_modules/, apps/*/node_modules/]
+    expire_in: 1h
+
+lint:
+  stage: lint
+  needs: [install]
+  script:
+    - export T0=$(date +%s%3N)
+    - pnpm run lint         # turbo run lint across all packages
+    - echo "LINT_TIME=$(($(date +%s%3N) - T0))" >> timing.env
+    - echo "INSTALL_TIME=${INSTALL_TIME}" >> timing.env
+  artifacts:
+    reports:
+      dotenv: timing.env
+
+typecheck:
+  stage: typecheck
+  needs: [install]
+  script:
+    - export T0=$(date +%s%3N)
+    - pnpm run typecheck    # turbo run typecheck
+    - echo "TC_TIME=$(($(date +%s%3N) - T0))" >> timing.env
+    - echo "INSTALL_TIME=${INSTALL_TIME}" >> timing.env
+  artifacts:
+    reports:
+      dotenv: timing.env
+
+build:
+  stage: build
+  needs:
+    - job: lint
+      artifacts: true
+    - job: typecheck
+      artifacts: true
+  script:
+    - export T0=$(date +%s%3N)
+    # Builds packages/notes-schema (tsup dual ESM+CJS), then apps/notes-app (next build)
+    - pnpm run build
+    - export BUILD_TIME=$(($(date +%s%3N) - T0))
+    # Collect sizes from the Next.js app output
+    - |
+      VARIANT=$VARIANT BUILD_DIR=apps/notes-app/.next \
+      INSTALL_TIME=${INSTALL_TIME:-0} LINT_TIME=${LINT_TIME:-0} \
+      TC_TIME=${TC_TIME:-0} BUILD_TIME=$BUILD_TIME \
+      METRICS_OUT=bundle-metrics.txt \
+      node scripts/bundle-stats.mjs
+  artifacts:
+    paths:
+      - pipeline-report.json
+      - packages/notes-schema/dist/
+    reports:
+      metrics: bundle-metrics.txt
+    expire_in: 30d

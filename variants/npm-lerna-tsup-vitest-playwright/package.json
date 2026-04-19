@@ -1,0 +1,18 @@
+{
+  "name": "npm-lerna-tsup-vitest-playwright",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "build": "lerna run build",
+    "lint": "lerna run lint",
+    "typecheck": "lerna run typecheck",
+    "test": "lerna run test",
+    "bundle-stats": "node scripts/bundle-stats.mjs"
+  },
+  "devDependencies": {
+    "lerna": "^8",
+    "nx": "^21",
+    "typescript": "^5"
+  }
+}

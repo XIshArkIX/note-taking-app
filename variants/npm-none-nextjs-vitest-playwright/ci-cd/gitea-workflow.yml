@@ -1,0 +1,123 @@
+name: CI
+# variants/npm-none-nextjs-vitest-playwright/ci-cd/gitea-workflow.yml
+# Stack: npm · no monorepo · Next.js/SWC · Vitest · Playwright
+
+on:
+  push:
+    branches: ["main", "feat/**", "fix/**"]
+  pull_request:
+
+env:
+  VARIANT: "npm-none-nextjs-vitest-playwright"
+  NODE_VERSION: "22"
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    outputs:
+      install-time: ${{ steps.install.outputs.duration }}
+      cache-key: ${{ steps.key.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - id: key
+        run: echo "value=npm-${{ hashFiles('package-lock.json') }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ steps.key.outputs.value }}
+          restore-keys: npm-
+      - id: install
+        run: |
+          T0=$(date +%s%3N)
+          npm ci
+          DUR=$(($(date +%s%3N) - T0))
+          echo "duration=${DUR}" >> "$GITHUB_OUTPUT"
+          echo "Install: ${DUR}ms"
+      - uses: actions/cache/save@v4
+        with:
+          path: node_modules
+          key: nm-${{ steps.key.outputs.value }}
+
+  lint:
+    runs-on: ubuntu-latest
+    needs: install
+    outputs:
+      lint-time: ${{ steps.lint.outputs.duration }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/cache/restore@v4
+        with:
+          path: node_modules
+          key: nm-${{ needs.install.outputs.cache-key }}
+          fail-on-cache-miss: true
+      - id: lint
+        run: |
+          T0=$(date +%s%3N)
+          npm run lint
+          DUR=$(($(date +%s%3N) - T0))
+          echo "duration=${DUR}" >> "$GITHUB_OUTPUT"
+          echo "Lint: ${DUR}ms"
+
+  typecheck:
+    runs-on: ubuntu-latest
+    needs: install
+    outputs:
+      tc-time: ${{ steps.tc.outputs.duration }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/cache/restore@v4
+        with:
+          path: node_modules
+          key: nm-${{ needs.install.outputs.cache-key }}
+          fail-on-cache-miss: true
+      - id: tc
+        run: |
+          T0=$(date +%s%3N)
+          npm run typecheck
+          DUR=$(($(date +%s%3N) - T0))
+          echo "duration=${DUR}" >> "$GITHUB_OUTPUT"
+          echo "Typecheck: ${DUR}ms"
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [install, lint, typecheck]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/cache/restore@v4
+        with:
+          path: node_modules
+          key: nm-${{ needs.install.outputs.cache-key }}
+          fail-on-cache-miss: true
+      - name: Build
+        id: build
+        run: |
+          T0=$(date +%s%3N)
+          npm run build
+          DUR=$(($(date +%s%3N) - T0))
+          echo "duration=${DUR}" >> "$GITHUB_OUTPUT"
+          echo "Build: ${DUR}ms"
+      - name: Bundle stats
+        run: |
+          VARIANT=${{ env.VARIANT }} \
+          INSTALL_TIME=${{ needs.install.outputs.install-time }} \
+          LINT_TIME=${{ needs.lint.outputs.lint-time }} \
+          TC_TIME=${{ needs.typecheck.outputs.tc-time }} \
+          BUILD_TIME=${{ steps.build.outputs.duration }} \
+          node scripts/bundle-stats.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-report-${{ env.VARIANT }}
+          path: pipeline-report.json
+          retention-days: 30

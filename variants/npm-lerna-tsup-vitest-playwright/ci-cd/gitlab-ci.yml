@@ -1,0 +1,76 @@
+# Stack: npm · Lerna+Nx · tsup (CJS-only) · Next.js · Vitest · Playwright
+stages: [install, lint, typecheck, build]
+
+variables:
+  VARIANT: "npm-lerna-tsup-vitest-playwright"
+
+default:
+  image: "node:22-slim"
+  interruptible: true
+
+install:
+  stage: install
+  cache:
+    key:
+      files: [package-lock.json]
+    paths: [~/.npm]
+    policy: pull-push
+  script:
+    - export T0=$(date +%s%3N)
+    - npm ci
+    - echo "INSTALL_TIME=$(($(date +%s%3N) - T0))" >> timing.env
+  artifacts:
+    reports:
+      dotenv: timing.env
+    paths: [node_modules/, packages/*/node_modules/, apps/*/node_modules/]
+    expire_in: 1h
+
+lint:
+  stage: lint
+  needs: [install]
+  script:
+    - export T0=$(date +%s%3N)
+    - npm run lint           # lerna run lint
+    - echo "LINT_TIME=$(($(date +%s%3N) - T0))" >> timing.env
+    - echo "INSTALL_TIME=${INSTALL_TIME}" >> timing.env
+  artifacts:
+    reports:
+      dotenv: timing.env
+
+typecheck:
+  stage: typecheck
+  needs: [install]
+  script:
+    - export T0=$(date +%s%3N)
+    - npm run typecheck      # lerna run typecheck
+    - echo "TC_TIME=$(($(date +%s%3N) - T0))" >> timing.env
+    - echo "INSTALL_TIME=${INSTALL_TIME}" >> timing.env
+  artifacts:
+    reports:
+      dotenv: timing.env
+
+build:
+  stage: build
+  needs:
+    - job: lint
+      artifacts: true
+    - job: typecheck
+      artifacts: true
+  script:
+    - export T0=$(date +%s%3N)
+    # Lerna builds packages/notes-schema (tsup CJS), then apps/notes-app (next build)
+    - npm run build
+    - export BUILD_TIME=$(($(date +%s%3N) - T0))
+    - |
+      VARIANT=$VARIANT BUILD_DIR=apps/notes-app/.next \
+      INSTALL_TIME=${INSTALL_TIME:-0} LINT_TIME=${LINT_TIME:-0} \
+      TC_TIME=${TC_TIME:-0} BUILD_TIME=$BUILD_TIME \
+      METRICS_OUT=bundle-metrics.txt \
+      node scripts/bundle-stats.mjs
+  artifacts:
+    paths:
+      - pipeline-report.json
+      - packages/notes-schema/dist/
+    reports:
+      metrics: bundle-metrics.txt
+    expire_in: 30d

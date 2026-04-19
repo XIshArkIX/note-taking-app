@@ -1,0 +1,73 @@
+# Stack: bun · no monorepo · Next.js/SWC · Vitest · Playwright
+stages: [install, lint, typecheck, build]
+
+variables:
+  VARIANT: "bun-none-nextjs-vitest-playwright"
+
+default:
+  image: "oven/bun:latest"
+  interruptible: true
+
+install:
+  stage: install
+  cache:
+    key:
+      files: [bun.lock]
+    paths: [~/.bun/install/cache]
+    policy: pull-push
+  script:
+    - export T0=$(date +%s%3N)
+    - bun install --frozen-lockfile
+    - echo "INSTALL_TIME=$(($(date +%s%3N) - T0))" >> timing.env
+  artifacts:
+    reports:
+      dotenv: timing.env
+    paths: [node_modules/]
+    expire_in: 1h
+
+lint:
+  stage: lint
+  needs: [install]
+  script:
+    - export T0=$(date +%s%3N)
+    - bun run lint
+    - echo "LINT_TIME=$(($(date +%s%3N) - T0))" >> timing.env
+    - echo "INSTALL_TIME=${INSTALL_TIME}" >> timing.env
+  artifacts:
+    reports:
+      dotenv: timing.env
+
+typecheck:
+  stage: typecheck
+  needs: [install]
+  script:
+    - export T0=$(date +%s%3N)
+    - bun run typecheck
+    - echo "TC_TIME=$(($(date +%s%3N) - T0))" >> timing.env
+    - echo "INSTALL_TIME=${INSTALL_TIME}" >> timing.env
+  artifacts:
+    reports:
+      dotenv: timing.env
+
+build:
+  stage: build
+  needs:
+    - job: lint
+      artifacts: true
+    - job: typecheck
+      artifacts: true
+  script:
+    - export T0=$(date +%s%3N)
+    - bun run build
+    - export BUILD_TIME=$(($(date +%s%3N) - T0))
+    - |
+      VARIANT=$VARIANT \
+      INSTALL_TIME=${INSTALL_TIME:-0} LINT_TIME=${LINT_TIME:-0} \
+      TC_TIME=${TC_TIME:-0} BUILD_TIME=$BUILD_TIME \
+      METRICS_OUT=bundle-metrics.txt \
+      bun run scripts/bundle-stats.mjs
+  artifacts:
+    paths: [pipeline-report.json]
+    reports:
+      metrics: bundle-metrics.txt
+    expire_in: 30d

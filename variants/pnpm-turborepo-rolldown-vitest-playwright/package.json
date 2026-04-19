@@ -1,0 +1,17 @@
+{
+  "name": "pnpm-turborepo-rolldown-vitest-playwright",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "bundle-stats": "node scripts/bundle-stats.mjs"
+  },
+  "devDependencies": {
+    "turbo": "^2",
+    "typescript": "^5"
+  }
+}

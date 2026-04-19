@@ -1,0 +1,78 @@
+# Stack: pnpm · no monorepo · Next.js/SWC · Vitest · Playwright
+stages: [install, lint, typecheck, build]
+
+variables:
+  VARIANT: "pnpm-none-nextjs-vitest-playwright"
+  NODE_IMAGE: "node:22-slim"
+  PNPM_STORE: ".pnpm-store"
+
+default:
+  image: $NODE_IMAGE
+  before_script:
+    - corepack enable && corepack prepare pnpm@latest --activate
+    - pnpm config set store-dir $PNPM_STORE
+  interruptible: true
+
+install:
+  stage: install
+  cache:
+    key:
+      files: [pnpm-lock.yaml]
+    paths: [$PNPM_STORE]
+    policy: pull-push
+  script:
+    - export T0=$(date +%s%3N)
+    - pnpm install --frozen-lockfile
+    - echo "INSTALL_TIME=$(($(date +%s%3N) - T0))" >> timing.env
+  artifacts:
+    reports:
+      dotenv: timing.env
+    paths: [node_modules/]
+    expire_in: 1h
+
+lint:
+  stage: lint
+  needs: [install]
+  script:
+    - export T0=$(date +%s%3N)
+    - pnpm run lint
+    - echo "LINT_TIME=$(($(date +%s%3N) - T0))" >> timing.env
+    - echo "INSTALL_TIME=${INSTALL_TIME}" >> timing.env
+  artifacts:
+    reports:
+      dotenv: timing.env
+
+typecheck:
+  stage: typecheck
+  needs: [install]
+  script:
+    - export T0=$(date +%s%3N)
+    - pnpm run typecheck
+    - echo "TC_TIME=$(($(date +%s%3N) - T0))" >> timing.env
+    - echo "INSTALL_TIME=${INSTALL_TIME}" >> timing.env
+  artifacts:
+    reports:
+      dotenv: timing.env
+
+build:
+  stage: build
+  needs:
+    - job: lint
+      artifacts: true
+    - job: typecheck
+      artifacts: true
+  script:
+    - export T0=$(date +%s%3N)
+    - pnpm run build
+    - export BUILD_TIME=$(($(date +%s%3N) - T0))
+    - |
+      VARIANT=$VARIANT \
+      INSTALL_TIME=${INSTALL_TIME:-0} LINT_TIME=${LINT_TIME:-0} \
+      TC_TIME=${TC_TIME:-0} BUILD_TIME=$BUILD_TIME \
+      METRICS_OUT=bundle-metrics.txt \
+      node scripts/bundle-stats.mjs
+  artifacts:
+    paths: [pipeline-report.json]
+    reports:
+      metrics: bundle-metrics.txt
+    expire_in: 30d

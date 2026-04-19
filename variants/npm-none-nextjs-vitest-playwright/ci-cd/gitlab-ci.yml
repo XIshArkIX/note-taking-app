@@ -1,0 +1,88 @@
+# variants/npm-none-nextjs-vitest-playwright/ci-cd/gitlab-ci.yml
+#
+# Stack: npm  · no monorepo · Next.js/SWC · Vitest · Playwright
+# Gates: install → lint → typecheck → build
+# Artifacts: pipeline-report.json (timings + bundle sizes)
+
+stages: [install, lint, typecheck, build]
+
+variables:
+  VARIANT: "npm-none-nextjs-vitest-playwright"
+  NODE_IMAGE: "node:22-slim"
+
+default:
+  image: $NODE_IMAGE
+  interruptible: true
+
+# ── install ────────────────────────────────────────────────────────────────
+install:
+  stage: install
+  cache:
+    key:
+      files: [package-lock.json]
+    paths: [~/.npm]
+    policy: pull-push
+  script:
+    - export T0=$(date +%s%3N)
+    - npm ci
+    - echo "INSTALL_TIME=$(($(date +%s%3N) - T0))" >> timing.env
+    - echo "Install time $(($(date +%s%3N) - T0))ms"
+  artifacts:
+    reports:
+      dotenv: timing.env
+    paths: [node_modules/]
+    expire_in: 1h
+
+# ── lint ──────────────────────────────────────────────────────────────────
+lint:
+  stage: lint
+  needs: [install]
+  script:
+    - export T0=$(date +%s%3N)
+    - npm run lint
+    - echo "LINT_TIME=$(($(date +%s%3N) - T0))" >> timing.env
+    - echo "INSTALL_TIME=${INSTALL_TIME}" >> timing.env
+  artifacts:
+    reports:
+      dotenv: timing.env
+
+# ── typecheck ────────────────────────────────────────────────────────────
+typecheck:
+  stage: typecheck
+  needs: [install]
+  script:
+    - export T0=$(date +%s%3N)
+    - npm run typecheck
+    - echo "TC_TIME=$(($(date +%s%3N) - T0))" >> timing.env
+    - echo "INSTALL_TIME=${INSTALL_TIME}" >> timing.env
+  artifacts:
+    reports:
+      dotenv: timing.env
+
+# ── build + artifact report ───────────────────────────────────────────────
+build:
+  stage: build
+  needs:
+    - job: lint
+      artifacts: true
+    - job: typecheck
+      artifacts: true
+  script:
+    - export T0=$(date +%s%3N)
+    - npm run build
+    - export BUILD_TIME=$(($(date +%s%3N) - T0))
+    - echo "Build time ${BUILD_TIME}ms"
+    - |
+      VARIANT=$VARIANT \
+      INSTALL_TIME=${INSTALL_TIME:-0} \
+      LINT_TIME=${LINT_TIME:-0} \
+      TC_TIME=${TC_TIME:-0} \
+      BUILD_TIME=$BUILD_TIME \
+      METRICS_OUT=bundle-metrics.txt \
+      node scripts/bundle-stats.mjs
+  artifacts:
+    paths:
+      - pipeline-report.json
+    reports:
+      metrics: bundle-metrics.txt
+    expire_in: 30d
