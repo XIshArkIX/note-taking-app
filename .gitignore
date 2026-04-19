@@ -39,3 +39,21 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# variant node_modules (each variant installs independently)
+variants/*/node_modules/
+variants/*/apps/*/node_modules/
+variants/*/packages/*/node_modules/
+
+# allow committed variant lockfiles and yarn config
+!variants/*/bun.lock
+!variants/*/package-lock.json
+!variants/*/yarn.lock
+!variants/*/pnpm-lock.yaml
+!variants/*/.yarnrc.yml
+
+# yarn variant: ignore install state but not the config files
+variants/*/.yarn/install-state.gz
+variants/*/.yarn/cache/
+
+.pnpm-store
